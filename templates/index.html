@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prediksi Kegagalan Mesin</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container"><span class="navbar-brand mb-0 h1">Prediksi Kegagalan Mesin Produksi</span></div>
+</nav>
+<div class="container pb-5" style="max-width: 900px;">
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Masukkan kondisi operasi mesin</h5>
+      <p class="text-muted small">Model Regresi Logistik memperkirakan probabilitas mesin mengalami kegagalan, berdasarkan data AI4I 2020 Predictive Maintenance (10.000 data, kegagalan {{ "%.2f"|format(meta.fail_rate*100) }}%).</p>
+
+      <div class="mb-3">
+        <span class="small text-muted me-2">Isi contoh:</span>
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="isiContoh('normal')">Mesin normal</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="isiContoh('risiko')">Mesin berisiko</button>
+      </div>
+
+      <form method="post" class="row g-3" id="form-prediksi">
+        <div class="col-md-4">
+          <label for="type" class="form-label">Tipe Produk</label>
+          <select class="form-select" id="type" name="type">
+            {% for t, nm in [("L","L (Low)"),("M","M (Medium)"),("H","H (High)")] %}
+            <option value="{{ t }}" {% if form.type == t %}selected{% endif %}>{{ nm }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% for key, label, unit, step in fields %}
+        <div class="col-md-4">
+          <label for="{{ key }}" class="form-label">{{ label }} ({{ unit }})</label>
+          <input type="number" step="{{ step }}" min="{{ meta.ranges[key][0] }}" max="{{ meta.ranges[key][1] }}"
+                 class="form-control" id="{{ key }}" name="{{ key }}" value="{{ form[key] }}" required>
+          <div class="form-text">Rentang: {{ "%g"|format(meta.ranges[key][0]) }} - {{ "%g"|format(meta.ranges[key][1]) }}</div>
+        </div>
+        {% endfor %}
+        <div class="col-12"><button type="submit" class="btn btn-primary">Prediksi</button></div>
+      </form>
+
+      {% if error %}<div class="alert alert-danger mt-3 mb-0">{{ error }}</div>{% endif %}
+
+      {% if hasil %}
+      <div class="alert {{ 'alert-danger' if hasil.berisiko else 'alert-success' }} mt-3 mb-0">
+        <div class="small text-uppercase">Hasil prediksi</div>
+        <div class="display-6">{{ "Berisiko Gagal" if hasil.berisiko else "Tidak Berisiko" }}</div>
+        <div>Probabilitas gagal: <strong>{{ hasil.persen }}%</strong> (ambang batas {{ "%.0f"|format(meta.threshold*100) }}%)</div>
+        <div class="progress mt-2" style="height: 10px;">
+          <div class="progress-bar {{ 'bg-danger' if hasil.berisiko else 'bg-success' }}" style="width: {{ hasil.persen }}%"></div>
+        </div>
+        <div class="small mt-2">
+          {% if hasil.berisiko %}Saran: jadwalkan pemeriksaan atau penggantian komponen sebelum mesin dioperasikan kembali.
+          {% else %}Saran: mesin dapat dioperasikan seperti biasa, tetap pantau keausan alat.{% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Kinerja model (data uji, {{ meta.n_test }} data)</h5>
+      <div class="row text-center g-2 mb-3">
+        {% for nm, k in [("Recall","recall"),("Precision","precision"),("F1-Score","f1"),("AUC","auc")] %}
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">{{ nm }}</div><strong>{{ "%.2f"|format(meta.metrics[k]) }}</strong></div></div>
+        {% endfor %}
+      </div>
+      <p class="small text-muted mb-0">
+        Model mengutamakan <strong>Recall</strong> ({{ "%.0f"|format(meta.metrics.recall*100) }}% kegagalan terdeteksi) karena kegagalan yang terlewat lebih merugikan daripada pemeriksaan yang ternyata tidak perlu.
+        Konsekuensinya Precision rendah ({{ "%.0f"|format(meta.metrics.precision*100) }}%), sehingga banyak alarm yang berujung pemeriksaan ekstra. Hasil ini adalah perkiraan, bukan pengganti inspeksi teknisi.
+      </p>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6"><img class="img-fluid rounded shadow-sm" src="{{ url_for('static', filename='img/confusion_matrix.png') }}" alt="Confusion matrix"></div>
+    <div class="col-md-6"><img class="img-fluid rounded shadow-sm" src="{{ url_for('static', filename='img/roc_curve.png') }}" alt="Kurva ROC"></div>
+
+<script>
+const CONTOH = {{ meta.examples | tojson }};
+function isiContoh(jenis) {
+  const c = CONTOH[jenis];
+  document.getElementById('type').value = c.type;
+  for (const k of ['air_temp','process_temp','rot_speed','torque','tool_wear']) document.getElementById(k).value = c[k];
+}
+</script>
+</body>
+</html>
